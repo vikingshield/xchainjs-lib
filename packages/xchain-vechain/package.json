@@ -1,0 +1,51 @@
+{
+  "name": "@xchainjs/xchain-vechain",
+  "version": "0.1.0",
+  "description": "Custom Vechain client and utilities used by XChainJS clients",
+  "keywords": [
+    "XChain",
+    "Vechain"
+  ],
+  "author": "XChain",
+  "homepage": "https://github.com/xchainjs/xchainjs-lib",
+  "license": "MIT",
+  "main": "lib/index.js",
+  "module": "lib/index.esm.js",
+  "typings": "lib/index.d.ts",
+  "directories": {
+    "lib": "lib",
+    "test": "__tests__"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:xchainjs/xchainjs-lib.git"
+  },
+  "scripts": {
+    "clean": "rimraf lib/**",
+    "build": "rollup -c",
+    "test": "jest",
+    "lint": "eslint \"{src,__tests__}/**/*.ts\" --fix --max-warnings 0",
+    "prepublishOnly": "yarn build",
+    "start:example": "ts-node example/index.ts"
+  },
+  "devDependencies": {
+    "@types/big.js": "^4.0.5",
+    "jest-websocket-mock": "^2.2.0",
+    "mock-socket": "9.0.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@lunarhq/rosetta-ts-client": "git+https://github.com/lunarhq/rosetta-ts-client#release/1.4.1",
+    "@xchainjs/xchain-client": "^0.0.7",
+    "@xchainjs/xchain-crypto": "^0.2.0",
+    "@xchainjs/xchain-util": "^0.1.0",
+    "axios": "^0.19.2",
+    "nock": "^13.0.4",
+    "thor-devkit": "^1.3.3"
+  }
+}
