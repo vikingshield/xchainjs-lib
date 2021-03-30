@@ -14,8 +14,7 @@ import {
 import { Asset, baseAmount, assetToString } from '@xchainjs/xchain-util'
 import * as xchainCrypto from '@xchainjs/xchain-crypto'
 
-import { PrivKey, codec } from 'cosmos-client'
-import { MsgSend, MsgMultiSend } from 'cosmos-client/x/bank'
+import { cosmosclient, cosmos } from 'cosmos-client'
 
 import { CosmosSDKClient } from './cosmos/sdk-client'
 import { AssetAtom, AssetMuon } from './types'
@@ -36,7 +35,7 @@ class Client implements CosmosClient, XChainClient {
   private sdkClient: CosmosSDKClient
   private phrase = ''
   private address: Address = '' // default address at index 0
-  private privateKey: PrivKey | null = null // default private key at index 0
+  private privateKey: cosmosclient.PrivKey | null = null // default private key at index 0
 
   /**
    * Constructor
@@ -121,8 +120,8 @@ class Client implements CosmosClient, XChainClient {
    * @returns {void}
    */
   private registerCodecs = (): void => {
-    codec.registerCodec('cosmos-sdk/MsgSend', MsgSend, MsgSend.fromJSON)
-    codec.registerCodec('cosmos-sdk/MsgMultiSend', MsgMultiSend, MsgMultiSend.fromJSON)
+    cosmosclient.codec.register('cosmos-sdk/MsgSend', cosmos.bank.v1beta1.MsgSend)
+    cosmosclient.codec.register('cosmos-sdk/MsgMultiSend', cosmos.bank.v1beta1.MsgMultiSend)
   }
 
   /**
@@ -186,7 +185,7 @@ class Client implements CosmosClient, XChainClient {
    * @throws {"Phrase not set"}
    * Throws an error if phrase has not been set before
    * */
-  private getPrivateKey = (): PrivKey => {
+  private getPrivateKey = (): cosmosclient.PrivKey => {
     if (!this.privateKey) {
       if (!this.phrase) throw new Error('Phrase not set')
 
@@ -341,7 +340,7 @@ class Client implements CosmosClient, XChainClient {
         memo,
       })
 
-      return transferResult?.txhash || ''
+      return transferResult?.hash || ''
     } catch (error) {
       return Promise.reject(error)
     }

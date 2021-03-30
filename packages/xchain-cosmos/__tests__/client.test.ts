@@ -2,7 +2,8 @@ import nock from 'nock'
 
 import { TxsPage } from '@xchainjs/xchain-client'
 import { baseAmount, BaseAmount } from '@xchainjs/xchain-util'
-import { BroadcastTxCommitResult, Coin, BaseAccount } from 'cosmos-client/api'
+import { BroadcastTxCommitResult, Coin } from 'cosmos-client/openapi'
+import { cosmosclient, cosmos } from 'cosmos-client'
 import { AssetMuon } from '../src/types'
 import { Client } from '../src/client'
 import { getDenom } from '../src/util'
@@ -13,7 +14,7 @@ const mockAccountsAddress = (
   address: string,
   result: {
     height: number
-    result: BaseAccount
+    result: cosmos.auth.v1beta1.IBaseAccount
   },
 ) => {
   nock(url).get(`/auth/accounts/${address}`).reply(200, result)
@@ -256,21 +257,16 @@ describe('Client Test', () => {
     const expected_txsPost_result: BroadcastTxCommitResult = {
       check_tx: {},
       deliver_tx: {},
-      txhash: 'EA2FAC9E82290DCB9B1374B4C95D7C4DD8B9614A96FACD38031865EB1DBAE24D',
+      hash: 'EA2FAC9E82290DCB9B1374B4C95D7C4DD8B9614A96FACD38031865EB1DBAE24D',
       height: 0,
     }
 
     mockAccountsAddress(cosmosClient.getClientUrl(), cosmosClient.getAddress(), {
       height: 0,
       result: {
-        coins: [
-          {
-            denom: 'muon',
-            amount: '21000',
-          },
-        ],
-        account_number: '0',
-        sequence: '0',
+        address: cosmosClient.getAddress(),
+        account_number: cosmosclient.Long.fromString('0'),
+        sequence: cosmosclient.Long.fromString('0'),
       },
     })
     assertTxsPost(

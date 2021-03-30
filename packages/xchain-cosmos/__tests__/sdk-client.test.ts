@@ -1,9 +1,8 @@
 import nock from 'nock'
-import { TxHistoryResponse, TxResponse } from '@xchainjs/xchain-cosmos'
-import { BroadcastTxCommitResult, Coin, BaseAccount } from 'cosmos-client/api'
-import { MsgSend, MsgMultiSend } from 'cosmos-client/x/bank'
-import { codec } from 'cosmos-client'
+import { BroadcastTxCommitResult, Coin } from 'cosmos-client/openapi'
+import { cosmosclient, cosmos } from 'cosmos-client'
 
+import { TxHistoryResponse, TxResponse } from '../src'
 import { CosmosSDKClient } from '../src/cosmos/sdk-client'
 
 const mockAccountsAddress = (
@@ -11,7 +10,7 @@ const mockAccountsAddress = (
   address: string,
   result: {
     height: number
-    result: BaseAccount
+    result: cosmos.auth.v1beta1.IBaseAccount
   },
 ) => {
   nock(url).get(`/auth/accounts/${address}`).reply(200, result)
@@ -273,21 +272,16 @@ describe('SDK Client Test', () => {
     const expected_txsPost_result: BroadcastTxCommitResult = {
       check_tx: {},
       deliver_tx: {},
-      txhash: 'EA2FAC9E82290DCB9B1374B4C95D7C4DD8B9614A96FACD38031865EB1DBAE24D',
+      hash: 'EA2FAC9E82290DCB9B1374B4C95D7C4DD8B9614A96FACD38031865EB1DBAE24D',
       height: 0,
     }
 
     mockAccountsAddress(cosmosTestnetClient.server, cosmos_address, {
       height: 0,
       result: {
-        coins: [
-          {
-            denom: 'muon',
-            amount: '21000',
-          },
-        ],
-        account_number: '0',
-        sequence: '0',
+        address: cosmos_address,
+        account_number: cosmosclient.Long.fromString('0'),
+        sequence: cosmosclient.Long.fromString('0'),
       },
     })
 
@@ -306,8 +300,8 @@ describe('SDK Client Test', () => {
       expected_txsPost_result,
     )
 
-    codec.registerCodec('cosmos-sdk/MsgSend', MsgSend, MsgSend.fromJSON)
-    codec.registerCodec('cosmos-sdk/MsgMultiSend', MsgMultiSend, MsgMultiSend.fromJSON)
+    cosmosclient.codec.register('cosmos-sdk/MsgSend', cosmos.bank.v1beta1.MsgSend)
+    cosmosclient.codec.register('cosmos-sdk/MsgMultiSend', cosmos.bank.v1beta1.MsgMultiSend)
 
     const result = await cosmosTestnetClient.transfer({
       privkey: cosmosTestnetClient.getPrivKeyFromMnemonic(cosmos_phrase),
@@ -323,14 +317,9 @@ describe('SDK Client Test', () => {
     mockAccountsAddress(thorTestnetClient.server, thor_testnet_address, {
       height: 0,
       result: {
-        coins: [
-          {
-            denom: 'thor',
-            amount: '21000',
-          },
-        ],
-        account_number: '0',
-        sequence: '0',
+        address: cosmos_address,
+        account_number: cosmosclient.Long.fromString('0'),
+        sequence: cosmosclient.Long.fromString('0'),
       },
     })
     assertTxsPost(
