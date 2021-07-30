@@ -1,3 +1,3 @@
 export * from './client-types'
 export * from './common'
-export * from './ledger'
+export * from './dcrdata-api-types'

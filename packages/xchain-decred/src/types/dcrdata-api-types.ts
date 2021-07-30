@@ -1,5 +1,29 @@
 import { Network, TxHash } from '@xchainjs/xchain-client'
 
+export type TxUnspent = {
+  address: string
+  txid: string
+  vout: number
+  ts: number
+  scriptPubKey: string
+  height: number
+  amount: number
+  satoshis: number
+  confirmations: number
+}
+
+export type DcrUTXO = {
+  address: string
+  txid: TxHash
+  vout: number
+  ts: number
+  scriptPubKey: string
+  height: number
+  amount: number
+  satoshis: number
+  confirmations: number
+}
+
 export type AddressParams = {
   dcrdataUrl: string
   network: Network
@@ -17,6 +41,23 @@ export type TxBroadcastParams = {
   dcrdataUrl: string
   network: Network
   txHex: string
+}
+
+export type DcrTxFrom = {
+  txid: string
+  sequence: number
+  n: number
+  addr: string
+  value: number
+  valueSat: number
+}
+
+export type DcrTxTo = {
+  value: number
+  n: number
+  scriptPubKey: {
+    addresses: string[]
+  }
 }
 
 export interface DcrdataResponse<T> {

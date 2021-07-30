@@ -39,7 +39,7 @@
     "@xchainjs/xchain-util": "^0.3.0",
     "axios": "^0.21.0",
     "axios-mock-adapter": "^1.19.0",
-    "decredjs-lib": "git://github.com/vikingshield/decredjs-lib#767807b0f16eb86c74c89467f22fdf5dc01454be",
+    "decredjs-lib": "git://github.com/vikingshield/decredjs-lib#59714ef765734d3a943e04d1585799c3dc30a26f",
 
     "coinselect": "^3.1.12",
     "wif": "^2.0.6",
@@ -50,7 +50,7 @@
     "@xchainjs/xchain-crypto": "^0.2.4",
     "@xchainjs/xchain-util": "^0.3.0",
     "axios": "^0.21.0",
-    "decredjs-lib": "git://github.com/vikingshield/decredjs-lib#767807b0f16eb86c74c89467f22fdf5dc01454be",
+    "decredjs-lib": "git://github.com/vikingshield/decredjs-lib#59714ef765734d3a943e04d1585799c3dc30a26f",
     "coinselect": "^3.1.12",
     "wif": "^2.0.6",
     "unorm": "^1.6.0"

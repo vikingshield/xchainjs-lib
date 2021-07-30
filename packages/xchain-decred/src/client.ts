@@ -2,31 +2,26 @@ import {
   Address,
   Balance,
   Fee,
-  //FeeOption,
+  // Fee,
   FeeRate,
+  FeeType,
   Network,
   Tx,
   TxHash,
   TxHistoryParams,
   TxParams,
-  //TxType,
   TxsPage,
   UTXOClient,
   XChainClientParams,
 } from '@xchainjs/xchain-client'
+import { Fees, FeesWithRates } from '@xchainjs/xchain-client/src'
 import { getSeed } from '@xchainjs/xchain-crypto'
-import {
-  //AssetDCR,
-  Chain,
-  // assetAmount,
-  // assetToBase
-} from '@xchainjs/xchain-util'
+import { dcrNetwork } from '@xchainjs/xchain-decred/src/utils'
+import { Chain, assetAmount, assetToBase } from '@xchainjs/xchain-util'
 import * as Decred from 'decredjs-lib'
 
-// import { DCR_DECIMAL } from './const'
-// import * as dcrdata from './dcrdata-api'
-//import * as Utils from './utils'
-//import { dcrNetwork } from './utils'
+import * as dcrdata from './dcrdata-api'
+import * as utils from './utils'
 
 export type DecredClientParams = XChainClientParams & {
   dcrdataUrl?: string
@@ -36,7 +31,7 @@ export type DecredClientParams = XChainClientParams & {
  * Custom Bitcoin client
  */
 class Client extends UTXOClient {
-  // private dcrdataUrl = ''
+  private dcrdataUrl = ''
 
   /**
    * Constructor
@@ -75,9 +70,9 @@ class Client extends UTXOClient {
   getExplorerUrl(): string {
     switch (this.network) {
       case Network.Mainnet:
-        return 'https://dcrdata.decred.org/api'
+        return 'https://dcrdata.decred.org'
       case Network.Testnet:
-        return 'https://testnet.dcrdata.org/api'
+        return 'https://testnet.dcrdata.org'
     }
   }
 
@@ -88,7 +83,7 @@ class Client extends UTXOClient {
    * @returns {string} The explorer url for the given address based on the network.
    */
   getExplorerAddressUrl(address: string): string {
-    return `${this.getExplorerUrl()}/address/${address}` // TODO: Verify: this only returns the last 10 tx
+    return `${this.getExplorerUrl()}/api/address/${address}` // TODO: Verify: this only returns the last 10 tx
   }
   /**
    * Get the explorer url for the given transaction id.
@@ -97,7 +92,7 @@ class Client extends UTXOClient {
    * @returns {string} The explorer url for the given transaction id based on the network.
    */
   getExplorerTxUrl(txID: string): string {
-    return `${this.getExplorerUrl()}/tx/${txID}`
+    return `${this.getExplorerUrl()}/api/tx/${txID}`
   }
 
   /**
@@ -174,7 +169,7 @@ class Client extends UTXOClient {
    */
   validateAddress(address: string): boolean {
     //return Utils.validateAddress(address, this.network)
-    return Decred.isValid(address, this.network)
+    return Decred.Address.isValid(address, dcrNetwork(this.network))
   }
 
   /**
@@ -183,14 +178,12 @@ class Client extends UTXOClient {
    * @param {Address} the BTC address
    * @returns {Balance[]} The BTC balance of the address.
    */
-  // async getBalance(address: Address): Promise<Balance[]> {
-  async getBalance(_: Address): Promise<Balance[]> {
-    // return Utils.getBalance({
-    //   dcrdataUrl: this.dcrdataUrl,
-    //   network: this.network,
-    //   address: address,
-    // })
-    return {} as Promise<Balance[]>
+  async getBalance(address: Address): Promise<Balance[]> {
+    return utils.getBalance({
+      dcrdataUrl: this.dcrdataUrl,
+      network: this.network,
+      address: address,
+    })
   }
 
   /**
@@ -200,86 +193,53 @@ class Client extends UTXOClient {
    * @param {TxHistoryParams} params The options to get transaction history. (optional)
    * @returns {TxsPage} The transaction history.
    */
-  // async getTransactions(params?: TxHistoryParams): Promise<TxsPage> {
-  async getTransactions(_?: TxHistoryParams): Promise<TxsPage> {
-    // Sochain API doesn't have pagination parameter
-    // const offset = params?.offset ?? 0
-    // const limit = params?.limit || 10
-    //
-    // const response = await dcrdata.getAddress({
-    //   address: params?.address + '',
-    //   dcrdataUrl: this.dcrdataUrl,
-    //   network: this.network,
-    // })
-    // const total = response.txs.length
-    // const transactions: Tx[] = []
-    //
-    // const txs = response.txs.filter((_: any, index: number) => offset <= index && index < offset + limit)
-    // for (const txItem of txs) {
-    //   const rawTx = await dcrdata.getTx({
-    //     dcrdataUrl: this.dcrdataUrl,
-    //     network: this.network,
-    //     hash: txItem.txid,
-    //   })
-    //   const tx: Tx = {
-    //     asset: AssetBTC,
-    //     from: rawTx.inputs.map((i) => ({
-    //       from: i.address,
-    //       amount: assetToBase(assetAmount(i.value, DCR_DECIMAL)),
-    //     })),
-    //     to: rawTx.outputs
-    //       .filter((i) => i.type !== 'nulldata')
-    //       .map((i) => ({ to: i.address, amount: assetToBase(assetAmount(i.value, DCR_DECIMAL)) })),
-    //     date: new Date(rawTx.time * 1000),
-    //     type: TxType.Transfer,
-    //     hash: rawTx.txid,
-    //   }
-    //   transactions.push(tx)
-    // }
-    //
-    // const result: TxsPage = {
-    //   total,
-    //   txs: transactions,
-    // }
-    // return result
+  async getTransactions(params?: TxHistoryParams): Promise<TxsPage> {
+    return await dcrdata.getAddress(
+      {
+        address: params?.address + '',
+        dcrdataUrl: this.dcrdataUrl,
+        network: this.network,
+      },
+      params?.offset,
+      params?.limit,
+    )
+
     return {} as Promise<TxsPage>
   }
 
   /**
    * Get the transaction details of a given transaction id.
-   *
+   * This does not include "data" output that has no value and no destination address
    * @param {string} txId The transaction id.
    * @returns {Tx} The transaction details of the given transaction id.
    */
-  async getTransactionData(_: string): Promise<Tx> {
-    // async getTransactionData(txId: string): Promise<Tx> {
-    // const rawTx = await dcrdata.getTx({
-    //   dcrdataUrl: this.dcrdataUrl,
-    //   network: this.network,
-    //   hash: txId,
-    // })
-    // return {
-    //   asset: AssetBTC,
-    //   from: rawTx.inputs.map((i) => ({
-    //     from: i.address,
-    //     amount: assetToBase(assetAmount(i.value, DCR_DECIMAL)),
-    //   })),
-    //   to: rawTx.outputs.map((i) => ({ to: i.address, amount: assetToBase(assetAmount(i.value, DCR_DECIMAL)) })),
-    //   date: new Date(rawTx.time * 1000),
-    //   type: TxType.Transfer,
-    //   hash: rawTx.txid,
-    // }
-    return {} as Promise<Tx>
+  async getTransactionData(txId: string): Promise<Tx> {
+    return dcrdata.getTx(txId, this.network)
+  }
+
+  //
+  async getFeesWithRates(_?: string): Promise<FeesWithRates> {
+    const feerates = { average: 10, fast: 20, fastest: 30 }
+    const fees = {
+      average: assetToBase(assetAmount(0.0001)),
+      fast: assetToBase(assetAmount(0.0002)),
+      fastest: assetToBase(assetAmount(0.0003)),
+      type: FeeType.PerByte,
+    }
+    return { rates: feerates, fees: fees }
+  }
+  async getFees(memo?: string): Promise<Fees> {
+    const { fees } = await this.getFeesWithRates(memo)
+    return fees
   }
 
   protected async getSuggestedFeeRate(): Promise<FeeRate> {
-    // return await dcrdata.getSuggestedTxFee()
+    //return await dcrdata.getSuggestedTxFee(this.network)
     return {} as Promise<FeeRate>
   }
-  protected async calcFee(_: FeeRate, __?: string): Promise<Fee> {
-    // protected async calcFee(feeRate: FeeRate, memo?: string): Promise<Fee> {
-    // return Utils.calcFee(feeRate, memo)
-    return {} as Promise<Fee>
+
+  protected async calcFee(feeRate: FeeRate, memo?: string): Promise<Fee> {
+    return utils.calcFee(feeRate, memo)
   }
 
   /**
@@ -288,34 +248,37 @@ class Client extends UTXOClient {
    * @param {TxParams&FeeRate} params The transfer options.
    * @returns {TxHash} The transaction hash.
    */
-  async transfer(_: TxParams & { feeRate?: FeeRate }): Promise<TxHash> {
-    // const fromAddressIndex = params?.walletIndex || 0
-    //
-    // // set the default fee rate to `fast`
+  async transfer(params: TxParams & { feeRate?: FeeRate }): Promise<TxHash> {
+    const fromAddressIndex = params?.walletIndex || 0
+
+    // set the default fee rate to `fast`
     // const feeRate = params.feeRate || (await this.getFeeRates())[FeeOption.Fast]
-    //
-    // /**
-    //  * do not spend pending UTXOs when adding a memo
-    //  * https://github.com/xchainjs/xchainjs-lib/issues/330
-    //  */
-    // const spendPendingUTXO: boolean = params.memo ? false : true
-    //
-    // const { psbt } = await Utils.buildTx({
-    //   ...params,
-    //   feeRate,
-    //   sender: this.getAddress(fromAddressIndex),
-    //   dcrdataUrl: this.dcrdataUrl,
-    //   network: this.network,
-    //   spendPendingUTXO,
-    // })
-    //
-    // const btcKeys = this.getDcrKey(this.phrase, fromAddressIndex)
-    // psbt.signAllInputs(btcKeys) // Sign all inputs
-    // psbt.finalizeAllInputs() // Finalise inputs
-    // const txHex = psbt.extractTransaction().toHex() // TX extracted and formatted to hex
-    //
-    // return await Utils.broadcastTx({ network: this.network, txHex, dcrdataUrl: this.dcrdataUrl })
-    return {} as Promise<TxHash>
+    const feeRate = params.feeRate || 15
+
+    /**
+     * do not spend pending UTXOs when adding a memo
+     * https://github.com/xchainjs/xchainjs-lib/issues/330
+     */
+    const spendPendingUTXO: boolean = params.memo ? false : true
+
+    const { tx } = await utils.buildTx({
+      ...params,
+      feeRate,
+      sender: this.getAddress(fromAddressIndex),
+      dcrdataUrl: this.dcrdataUrl,
+      network: this.network,
+      spendPendingUTXO,
+    })
+
+    if (tx._inputAmount < tx._outputAmount) {
+      throw new Error('Insufficient Balance for transaction')
+    }
+    const dcrKeys = this.getDcrKey(this.phrase, fromAddressIndex)
+    tx.sign(dcrKeys)
+    const txbin = tx.serialize()
+    // console.log(txbin)
+    const txHex = txbin.toString('hex')
+    return await utils.broadcastTx({ network: this.network, txHex, dcrdataUrl: this.dcrdataUrl })
   }
 }
 

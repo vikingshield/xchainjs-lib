@@ -1,7 +1,10 @@
-import { Network } from '@xchainjs/xchain-client'
+import { Network, Tx, TxsPage } from '@xchainjs/xchain-client'
+import { TxFrom, TxTo, TxType } from '@xchainjs/xchain-client/src'
+import { DCR_DECIMAL } from '@xchainjs/xchain-decred/src/const'
+import { AssetDCR, BaseAmount, assetAmount, assetToBase, baseAmount } from '@xchainjs/xchain-util'
 import axios from 'axios'
 
-import { BroadcastTxParams } from './types/common'
+import { AddressParams, DcrTxFrom, DcrTxTo, DcrUTXO, TxBroadcastParams } from './types/dcrdata-api-types'
 
 /**
  * Broadcast transaction.
@@ -11,7 +14,7 @@ import { BroadcastTxParams } from './types/common'
  * @param {string} params
  * @returns {string} Transaction ID.
  */
-export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promise<string> => {
+export const broadcastTx = async ({ network, txHex }: TxBroadcastParams): Promise<string> => {
   const url = (() => {
     switch (network) {
       case Network.Mainnet:
@@ -19,51 +22,74 @@ export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promis
       case Network.Testnet:
         return `https://testnet.dcrdata.org/insight/api/tx/send`
     }
+    return ''
   })()
-  const txid: string = (await axios.post(url, txHex)).data
+  const headers = {
+    'Cache-Control': 'no-cache',
+    'Content-Type': 'application/json',
+    'Postman-Token': 'bf2e16a1-b6d2-4b2f-b6e5-9ea7bd3df5b1',
+  }
+  const txid: string = (await axios.post(url, `{"rawtx":"${txHex}"}`, { headers: headers })).data.txid
   return txid
 }
-
-// import { DCR_DECIMAL } from './const'
-// import {
-// AddressParams,
-// DcrAddressDTO,
-// DcrAddressUTXO,
-// DcrGetBalanceDTO,
-// DcrUnspentTxsDTO,
-// DcrdataResponse,
-// Transaction,
-// TxConfirmedStatus,
-// TxHashParams,
-// } from './types/dcrdata-api-types'
-
-// const DEFAULT_SUGGESTED_TRANSACTION_FEE = 127 // TODO: Investigate
-
-// const toDcrdataNetwork = (network: Network): string => {
-//   switch (network) {
-//     case Network.Mainnet:
-//       return 'BTC'
-//     case Network.Testnet:
-//       return 'BTCTEST'
-//   }
-// }
 
 /**
  * Get address information.
  *
- * @see https://sochain.com/api#get-display-data-address
+ * @see https://github.com/decred/dcrdata/blob/master/docs/Insight_API_documentation.md#addrstxs
  *
- * @param {string} sochainUrl The sochain node url.
+ * @param {string} dcrdataUrl
  * @param {string} network
  * @param {string} address
- * @returns {BtcAddressDTO}
+ * @returns {TxsPage}
  */
-// export const getAddress = async ({ sochainUrl, network, address }: AddressParams): Promise<DcrAddressDTO> => {
-//   const url = `${sochainUrl}/address/${toSochainNetwork(network)}/${address}`
-//   const response = await axios.get(url)
-//   const addressResponse: SochainResponse<BtcAddressDTO> = response.data
-//   return addressResponse.data
-// }
+export const getAddress = async (
+  { dcrdataUrl, network, address }: AddressParams,
+  offset = 0,
+  limit = 10,
+): Promise<TxsPage> => {
+  dcrdataUrl as string
+  const headers = {
+    'Cache-Control': 'no-cache',
+    'Content-Type': 'application/json',
+    'Postman-Token': 'bf2e16a1-b6d2-4b2f-b6e5-9ea7bd3df5b1',
+  }
+  let resp = null
+  if (network == Network.Mainnet) {
+    resp = await axios.post(
+      `https://dcrdata.decred.org/insight/api/addrs/txs`,
+      { addrs: address, from: `${offset}`, to: `${offset + limit}`, noScriptSig: '1', noAsm: '1' },
+      { headers: headers },
+    )
+  } else if (network == Network.Testnet) {
+    resp = await axios.post(
+      `https://testnet.dcrdata.org/insight/api/addrs/txs`,
+      { addrs: address, from: `${offset}`, to: `${offset + limit}`, noScriptSig: '1', noAsm: '1' },
+      { headers: headers },
+    )
+  }
+  const txs: Tx[] = []
+  if (resp?.status != 200) throw new Error('dcrdata API not OK')
+  const data = resp?.data
+  for (let i = 0; i < data.items.length; i++) {
+    const vin = data.items[i].vin
+    const from: TxFrom[] = []
+    vin.forEach(function (vi: DcrTxFrom) {
+      from.push({ from: vi.addr, amount: baseAmount(vi.valueSat) })
+    })
+    const to: TxTo[] = []
+    const vout = data.items[i].vout
+    vout.forEach(function (vo: DcrTxTo) {
+      if (vo.scriptPubKey.addresses)
+        to.push({ to: vo.scriptPubKey.addresses[0], amount: assetToBase(assetAmount(vo.value)) })
+    })
+    const date = new Date(data.items[i].time * 1000) // Date expects in milliseconds
+    const type = TxType.Transfer
+    const hash = data.items[i].txid
+    txs.push({ asset: AssetDCR, from: from, to: to, date: date, type: type, hash: hash })
+  }
+  return { total: txs.length, txs: txs }
+}
 
 /**
  * Get transaction by hash.
@@ -75,12 +101,31 @@ export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promis
  * @param {string} hash The transaction hash.
  * @returns {Transactions}
  */
-// export const getTx = async ({ sochainUrl, network, hash }: TxHashParams): Promise<Transaction> => {
-//   const url = `${sochainUrl}/get_tx/${toSochainNetwork(network)}/${hash}`
-//   const response = await axios.get(url)
-//   const tx: SochainResponse<Transaction> = response.data
-//   return tx.data
-// }
+export const getTx = async (txid: string, network: Network): Promise<Tx> => {
+  let dcrdataAPI
+  switch (network) {
+    case Network.Mainnet:
+      dcrdataAPI = 'https://dcrdata.decred.org/insght/api'
+      break
+    case Network.Testnet:
+      dcrdataAPI = 'https://testnet.dcrdata.org/insight/api'
+      break
+  }
+  const url = `${dcrdataAPI}/tx/${txid}`
+  const response = await axios.get(url)
+  const data = response.data
+  const from: TxFrom[] = []
+  const to: TxTo[] = []
+  data.vout.forEach(function (vo: DcrTxTo) {
+    if (vo.scriptPubKey.addresses)
+      to.push({ to: vo.scriptPubKey.addresses[0], amount: assetToBase(assetAmount(vo.value)) })
+  })
+  data.vin.forEach(function (vi: DcrTxFrom) {
+    from.push({ from: vi.addr, amount: assetToBase(assetAmount(vi.value)) })
+  })
+  const date = new Date(data.time * 1000) // Date expects in milliseconds
+  return { asset: AssetDCR, from: from, to: to, date: date, type: TxType.Transfer, hash: data.txid }
+}
 
 /**
  * Get address balance.
@@ -92,16 +137,21 @@ export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promis
  * @param {string} address
  * @returns {number}
  */
-// export const getBalance = async ({ sochainUrl, network, address }: AddressParams): Promise<BaseAmount> => {
-//   const url = `${sochainUrl}/get_address_balance/${toSochainNetwork(network)}/${address}`
-//   const response = await axios.get(url)
-//   const balanceResponse: SochainResponse<BtcGetBalanceDTO> = response.data
-//   const confirmed = assetAmount(balanceResponse.data.confirmed_balance, BTC_DECIMAL)
-//   const unconfirmed = assetAmount(balanceResponse.data.unconfirmed_balance, BTC_DECIMAL)
-//   const netAmt = confirmed.amount().plus(unconfirmed.amount())
-//   const result = assetToBase(assetAmount(netAmt, BTC_DECIMAL))
-//   return result
-// }
+export const getBalance = async ({ dcrdataUrl, network, address }: AddressParams): Promise<BaseAmount> => {
+  dcrdataUrl
+  let dcrdataAPI: string
+  switch (network) {
+    case Network.Mainnet:
+      dcrdataAPI = 'https://dcrdata.decred.org/api'
+      break
+    case Network.Testnet:
+      dcrdataAPI = 'https://testnet.dcrdata.org/api'
+      break
+  }
+  const url = `${dcrdataAPI}/address/${address}/totals`
+  const response = await axios.get(url)
+  return assetToBase(assetAmount(response.data.dcr_unspent, DCR_DECIMAL))
+}
 
 /**
  * Get unspent txs
@@ -113,52 +163,25 @@ export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promis
  * @param {string} address
  * @returns {BtcAddressUTXO[]}
  */
-// export const getUnspentTxs = async ({
-//   sochainUrl,
-//   network,
-//   address,
-//   startingFromTxId,
-// }: AddressParams): Promise<BtcAddressUTXO[]> => {
-//   let resp = null
-//   if (startingFromTxId) {
-//     resp = await axios.get(`${sochainUrl}/get_tx_unspent/${toSochainNetwork(network)}/${address}/${startingFromTxId}`)
-//   } else {
-//     resp = await axios.get(`${sochainUrl}/get_tx_unspent/${toSochainNetwork(network)}/${address}`)
-//   }
-//   const response: SochainResponse<BtcUnspentTxsDTO> = resp.data
-//   const txs = response.data.txs
-//   if (txs.length === 100) {
-//     //fetch the next batch
-//     const lastTxId = txs[99].txid
-//
-//     const nextBatch = await getUnspentTxs({
-//       sochainUrl,
-//       network,
-//       address,
-//       startingFromTxId: lastTxId,
-//     })
-//     return txs.concat(nextBatch)
-//   } else {
-//     return txs
-//   }
-// }
-
-/**
- * Get Tx Confirmation status
- *
- * @see https://sochain.com/api#get-is-tx-confirmed
- *
- * @param {string} sochainUrl The sochain node url.
- * @param {Network} network
- * @param {string} hash tx id
- * @returns {TxConfirmedStatus}
- */
-// export const getIsTxConfirmed = async ({ sochainUrl, network, hash }: TxHashParams): Promise<TxConfirmedStatus> => {
-//   const { data } = await axios.get<SochainResponse<TxConfirmedStatus>>(
-//     `${sochainUrl}/is_tx_confirmed/${toSochainNetwork(network)}/${hash}`,
-//   )
-//   return data.data
-// }
+export const getUnspentTxs = async ({
+  dcrdataUrl,
+  network,
+  address,
+  startingFromTxId,
+}: AddressParams): Promise<DcrUTXO[]> => {
+  dcrdataUrl
+  startingFromTxId
+  if (network == Network.Mainnet) {
+    const resp = await axios.get(`https://dcrdata.decred.org/insight/api/addr/${address}/utxo`)
+    const response: DcrUTXO[] = await resp?.data
+    return response
+  } else if (network == Network.Testnet) {
+    const resp = await axios.get(`https://testnet.dcrdata.org/insight/api/addr/${address}/utxo`)
+    const response: DcrUTXO[] = await resp?.data
+    return response
+  }
+  return []
+}
 
 /**
  * Get unspent txs and filter out pending UTXOs
@@ -170,49 +193,30 @@ export const broadcastTx = async ({ network, txHex }: BroadcastTxParams): Promis
  * @param {string} address
  * @returns {BtcAddressUTXO[]}
  */
-// export const getConfirmedUnspentTxs = async ({
-//   sochainUrl,
-//   network,
-//   address,
-// }: AddressParams): Promise<BtcAddressUTXO[]> => {
-//   const txs = await getUnspentTxs({
-//     sochainUrl,
-//     network,
-//     address,
-//   })
-//
-//   const confirmedUTXOs: BtcAddressUTXO[] = []
-//
-//   await Promise.all(
-//     txs.map(async (tx: BtcAddressUTXO) => {
-//       const { is_confirmed: isTxConfirmed } = await getIsTxConfirmed({
-//         sochainUrl,
-//         network,
-//         hash: tx.txid,
-//       })
-//
-//       if (isTxConfirmed) {
-//         confirmedUTXOs.push(tx)
-//       }
-//     }),
-//   )
-//
-//   return confirmedUTXOs
-// }
+export const getConfirmedUnspentTxs = async ({ dcrdataUrl, network, address }: AddressParams): Promise<DcrUTXO[]> => {
+  const txs = await getUnspentTxs({
+    dcrdataUrl,
+    network,
+    address,
+  })
+  return txs.filter((tx) => tx.confirmations > 0)
+}
 
 /**
  * Get Bitcoin suggested transaction fee.
  *
  * @returns {number} The Bitcoin suggested transaction fee per bytes in sat.
  */
-// export const getSuggestedTxFee = async (): Promise<number> => {
-//   //Note: sochain does not provide fee rate related data
-//   //So use Bitgo API for fee estimation
-//   //Refer: https://app.bitgo.com/docs/#operation/v2.tx.getfeeestimate
-//   try {
-//     const response = await axios.get('https://app.bitgo.com/api/v2/btc/tx/fee')
-//     return response.data.feePerKb / 1000 // feePerKb to feePerByte
-//   } catch (error) {
-//     return DEFAULT_SUGGESTED_TRANSACTION_FEE
-//   }
-// }
+export const getSuggestedTxFee = async (network: Network): Promise<number> => {
+  let resp = null
+  if (network == Network.Mainnet) {
+    resp = await axios.get(`https://dcrdata.decred.org/insight/api/utils/estimatefee`, { params: { nbBlocks: 1 } })
+  } else if (network == Network.Testnet) {
+    resp = await axios.get(`https://testnet.dcrdata.org/insight/api/utils/estimatefee?nbBlocks=1`, {
+      params: { nbBlocks: 1 },
+    })
+  }
+  const response: DcrUTXO[] = resp?.data
+  const key = '1' // keep the ts linter happy
+  return 10000 * Number(response[key as never]) // resp is DCR/KB, need ATOMs/B
+}
