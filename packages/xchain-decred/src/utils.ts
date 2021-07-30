@@ -209,7 +209,8 @@ export const buildTx = async ({
   network: Network
   dcrdataUrl: string
   spendPendingUTXO?: boolean
-}): Promise<{ tx: unknown; utxos: DcrUTXO[] }> => {
+  /* eslint-disable @typescript-eslint/no-explicit-any*/
+}): Promise<{ tx: any; utxos: DcrUTXO[] }> => {
   // search only confirmed UTXOs if pending UTXO is not allowed
   const confirmedOnly = !spendPendingUTXO
   const utxos = await scanUTXOs({ dcrdataUrl, network, address: sender, confirmedOnly })
